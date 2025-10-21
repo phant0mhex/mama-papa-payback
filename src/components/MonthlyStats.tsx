@@ -4,15 +4,8 @@ import { Calendar, TrendingUp, Download } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachMonthOfInterval, startOfYear, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+} from 'recharts';
 
 interface Payment {
   id: string;
@@ -109,29 +102,56 @@ export const MonthlyStats = ({ payments, onExportPDF }: MonthlyStatsProps) => {
         </Card>
       </div>
 
-      {/* Monthly Chart */}
+   {/* Monthly Chart */}
       <Card className="p-6 shadow-soft">
         <h3 className="text-sm font-medium mb-4">Évolution mensuelle</h3>
         <ResponsiveContainer width="100%" height={250}>
           <BarChart data={monthlyData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            {/* ... CartesianGrid, XAxis, YAxis ... */}
+             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               dataKey="month"
               tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+              axisLine={false} // Optionnel: Cacher la ligne de l'axe
+              tickLine={false} // Optionnel: Cacher les ticks
             />
             <YAxis
               tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
               tickFormatter={(value) => `${value}€`}
+              axisLine={false}
+              tickLine={false}
+              width={50} // Ajuster si besoin
             />
             <Tooltip
+              cursor={{ fill: 'hsl(var(--accent) / 0.1)' }} // Curseur au survol
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "var(--radius)",
+                backgroundColor: "hsl(var(--popover))", // Utilise la couleur du popover Shadcn
+                borderColor: "hsl(var(--border))",
+                borderRadius: "var(--radius)", // Utilise le radius Shadcn
+                boxShadow: "var(--shadow-md)", // Utilise l'ombre Shadcn
+                padding: "8px 12px",
               }}
-              formatter={(value: number) => [`${value.toFixed(2)} €`, "Montant"]}
+              labelStyle={{ // Style du label (mois)
+                marginBottom: "4px",
+                fontWeight: "500",
+                color: "hsl(var(--foreground))",
+              }}
+              itemStyle={{ // Style de chaque ligne dans le tooltip
+                fontSize: "12px",
+                color: "hsl(var(--muted-foreground))",
+              }}
+              formatter={(value: number, name: string, props: any) => {
+                 // Props contient l'entrée de données complète (props.payload)
+                 const count = props.payload.count;
+                 const formattedValue = `${value.toFixed(2)} €`;
+                 const paymentText = `${count} versement${count > 1 ? "s" : ""}`;
+                 // Retourne un tableau [valeur formatée, nom formaté]
+                 return [`${formattedValue} (${paymentText})`, "Montant"];
+              }}
+              // labelFormatter={(label) => `Mois: ${label}`} // Optionnel pour formater le label (mois)
             />
             <Bar dataKey="total" radius={[8, 8, 0, 0]}>
+              {/* ... Cell ... */}
               {monthlyData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}

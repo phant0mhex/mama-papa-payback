@@ -4,11 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, TrendingDown, Wallet, CheckCircle2 } from "lucide-react";
+import { Plus, TrendingDown, Wallet, CheckCircle2, Moon, Sun, Download } from "lucide-react"; // Ajout des icônes
 import { PaymentForm } from "./PaymentForm";
 import { PaymentHistory } from "./PaymentHistory";
 import { MonthlyStats } from "./MonthlyStats";
 import { exportToPDF } from "@/utils/pdfExport";
+import { useTheme } from "next-themes"; // Ajout pour le thème
+import {
+  Tooltip,
+  TooltipContent,
+  // TooltipProvider, // Déjà dans App.tsx
+  TooltipTrigger,
+} from "@/components/ui/tooltip"; // Ajout pour la barre de progression
+import { Skeleton } from "@/components/ui/skeleton"; // Ajout pour le chargement
 
 interface Debt {
   id: string;
@@ -29,17 +37,18 @@ interface Payment {
 export const DebtDashboard = () => {
   const [debt, setDebt] = useState<Debt | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Commencer en chargement
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
+    // setIsLoading(true); // Déplacé dans le try
     try {
-      setIsLoading(true);
-      
+      setIsLoading(true); // Mettre isLoading ici
       // Load debt
       const { data: debtData, error: debtError } = await supabase
         .from("debt")
@@ -61,39 +70,72 @@ export const DebtDashboard = () => {
 
         if (paymentsError) throw paymentsError;
         setPayments(paymentsData || []);
+      } else {
+        setPayments([]); // Vider les paiements si pas de dette
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading data:", error);
-      toast.error("Erreur lors du chargement des données");
+      toast.error(`Erreur lors du chargement: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Recalculer quand debt ou payments change
   const totalPaid = payments.reduce((sum, payment) => sum + parseFloat(payment.amount.toString()), 0);
   const remaining = debt ? parseFloat(debt.total_amount.toString()) - totalPaid : 0;
-  const progressPercentage = debt ? (totalPaid / parseFloat(debt.total_amount.toString())) * 100 : 0;
+  const progressPercentage = debt && debt.total_amount > 0 ? (totalPaid / parseFloat(debt.total_amount.toString())) * 100 : 0;
 
   const handleExportPDF = () => {
     if (!debt) return;
-    
     try {
-      exportToPDF(debt, payments, totalPaid, remaining);
+      // Trier les paiements par date (du plus ancien au plus récent) pour le PDF
+      const sortedPayments = [...payments].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
+      exportToPDF(debt, sortedPayments, totalPaid, remaining);
       toast.success("PDF exporté avec succès");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error exporting PDF:", error);
-      toast.error("Erreur lors de l'export PDF");
+      toast.error(`Erreur lors de l'export PDF: ${error.message || 'Erreur inconnue'}`);
     }
   };
 
+  // Affichage pendant le chargement
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Chargement...</div>
+      <div className="min-h-screen p-6 bg-gradient-to-b from-background to-secondary/20">
+        <div className="max-w-4xl mx-auto space-y-6">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-10 w-1/2 mb-4" />
+            <Skeleton className="h-10 w-10 rounded-full" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Skeleton className="h-28 w-full rounded-lg" />
+            <Skeleton className="h-28 w-full rounded-lg" />
+            <Skeleton className="h-28 w-full rounded-lg" />
+          </div>
+          <Skeleton className="h-20 w-full rounded-lg" />
+          <Skeleton className="h-80 w-full rounded-lg" />
+          <Skeleton className="h-12 w-full rounded-lg" />
+          <Skeleton className="h-60 w-full rounded-lg" />
+        </div>
       </div>
     );
   }
 
+  // Cas où la dette n'a pas pu être chargée
+  if (!debt) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 text-center">
+        <div>
+          <p className="text-destructive mb-4">Impossible de charger les informations sur la dette.</p>
+          <Button onClick={loadData}>Réessayer</Button>
+        </div>
+      </div>
+    );
+  }
+
+
+  // Affichage normal
   return (
     <div className="min-h-screen p-6 bg-gradient-to-b from-background to-secondary/20">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -101,10 +143,21 @@ export const DebtDashboard = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-semibold">Suivi de remboursement</h1>
-            {debt?.description && (
+            {debt.description && (
               <p className="text-muted-foreground mt-1">{debt.description}</p>
             )}
           </div>
+           {/* Bouton Thème */}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            aria-label="Toggle theme"
+          >
+            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span className="sr-only">Changer de thème</span>
+          </Button>
         </div>
 
         {/* Stats Cards */}
@@ -113,15 +166,15 @@ export const DebtDashboard = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Dette totale</p>
-                <p className="text-3xl font-semibold">{debt?.total_amount.toFixed(2)} €</p>
+                <p className="text-3xl font-semibold">{debt.total_amount.toFixed(2)} €</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Wallet className="w-6 h-6 text-primary" />
               </div>
             </div>
           </Card>
-
-          <Card className="p-6 shadow-soft hover:shadow-soft-md transition-all duration-300 hover:-translate-y-1">
+          {/* ... autres cartes ... */}
+           <Card className="p-6 shadow-soft hover:shadow-soft-md transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Déjà remboursé</p>
@@ -153,9 +206,17 @@ export const DebtDashboard = () => {
               <p className="text-sm font-medium">Progression</p>
               <p className="text-sm font-semibold text-success">{progressPercentage.toFixed(1)}%</p>
             </div>
-            <div className="relative">
-              <Progress value={progressPercentage} className="h-3" />
-            </div>
+             <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="relative cursor-default">
+                    {/* Appliquer l'animation définie */}
+                    <Progress value={progressPercentage} className="h-3 animate-progress-fill transition-all duration-1000" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{totalPaid.toFixed(2)} € / {debt.total_amount.toFixed(2)} €</p>
+                </TooltipContent>
+              </Tooltip>
           </div>
         </Card>
 
@@ -164,7 +225,7 @@ export const DebtDashboard = () => {
 
         {/* Add Payment Button */}
         {!showPaymentForm && (
-          <Button 
+          <Button
             onClick={() => setShowPaymentForm(true)}
             className="w-full"
             size="lg"
@@ -175,11 +236,11 @@ export const DebtDashboard = () => {
         )}
 
         {/* Payment Form */}
-        {showPaymentForm && debt && (
+        {showPaymentForm && ( // Plus besoin de vérifier debt ici car déjà fait plus haut
           <PaymentForm
             debtId={debt.id}
             onSuccess={() => {
-              loadData();
+              loadData(); // Recharger les données après ajout
               setShowPaymentForm(false);
             }}
             onCancel={() => setShowPaymentForm(false)}
@@ -187,11 +248,11 @@ export const DebtDashboard = () => {
         )}
 
         {/* Payment History */}
-        <PaymentHistory 
-          payments={payments} 
-          onPaymentDeleted={loadData}
+        <PaymentHistory
+          payments={payments}
+          onPaymentDeleted={loadData} // Recharger les données après suppression
         />
       </div>
     </div>
   );
-};
+}; // *** CETTE ACCOLADE MANQUAIT PROBABLEMENT ***
