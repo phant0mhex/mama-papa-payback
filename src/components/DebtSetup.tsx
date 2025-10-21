@@ -48,8 +48,8 @@ export const DebtSetup = ({ onDebtCreated }: DebtSetupProps) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <Card className="w-full max-w-md p-8 shadow-soft-lg">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-b from-background to-secondary/20">
+      <Card className="w-full max-w-md p-8 shadow-soft-lg animate-scale-in">
         <div className="flex items-center justify-center mb-8">
           <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center">
             <Wallet className="w-8 h-8 text-accent" />

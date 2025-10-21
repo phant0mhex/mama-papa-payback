@@ -51,7 +51,7 @@ export const PaymentForm = ({ debtId, onSuccess, onCancel }: PaymentFormProps) =
   };
 
   return (
-    <Card className="p-6 shadow-soft">
+    <Card className="p-6 shadow-soft animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold">Nouveau versement</h2>
         <Button variant="ghost" size="icon" onClick={onCancel}>

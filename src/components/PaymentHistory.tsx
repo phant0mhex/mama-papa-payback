@@ -57,12 +57,16 @@ export const PaymentHistory = ({ payments, onPaymentDeleted }: PaymentHistoryPro
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 animate-fade-in-up">
       <h2 className="text-xl font-semibold">Historique des versements</h2>
       
       <div className="space-y-2">
-        {payments.map((payment) => (
-          <Card key={payment.id} className="p-4 shadow-soft hover:shadow-soft-md transition-shadow">
+        {payments.map((payment, index) => (
+          <Card 
+            key={payment.id} 
+            className="p-4 shadow-soft hover:shadow-soft-md transition-all duration-300 hover:-translate-y-0.5"
+            style={{ animationDelay: `${index * 50}ms` }}
+          >
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">

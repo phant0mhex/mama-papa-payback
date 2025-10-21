@@ -7,11 +7,15 @@ import { toast } from "sonner";
 import { Plus, TrendingDown, Wallet, CheckCircle2 } from "lucide-react";
 import { PaymentForm } from "./PaymentForm";
 import { PaymentHistory } from "./PaymentHistory";
+import { MonthlyStats } from "./MonthlyStats";
+import { exportToPDF } from "@/utils/pdfExport";
 
 interface Debt {
   id: string;
   total_amount: number;
   description: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Payment {
@@ -70,6 +74,18 @@ export const DebtDashboard = () => {
   const remaining = debt ? parseFloat(debt.total_amount.toString()) - totalPaid : 0;
   const progressPercentage = debt ? (totalPaid / parseFloat(debt.total_amount.toString())) * 100 : 0;
 
+  const handleExportPDF = () => {
+    if (!debt) return;
+    
+    try {
+      exportToPDF(debt, payments, totalPaid, remaining);
+      toast.success("PDF exporté avec succès");
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast.error("Erreur lors de l'export PDF");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -79,7 +95,7 @@ export const DebtDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="min-h-screen p-6 bg-gradient-to-b from-background to-secondary/20">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -92,8 +108,8 @@ export const DebtDashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="p-6 shadow-soft">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in">
+          <Card className="p-6 shadow-soft hover:shadow-soft-md transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Dette totale</p>
@@ -105,19 +121,19 @@ export const DebtDashboard = () => {
             </div>
           </Card>
 
-          <Card className="p-6 shadow-soft">
+          <Card className="p-6 shadow-soft hover:shadow-soft-md transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Déjà remboursé</p>
                 <p className="text-3xl font-semibold text-success">{totalPaid.toFixed(2)} €</p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center animate-scale-in">
                 <CheckCircle2 className="w-6 h-6 text-success" />
               </div>
             </div>
           </Card>
 
-          <Card className="p-6 shadow-soft">
+          <Card className="p-6 shadow-soft hover:shadow-soft-md transition-all duration-300 hover:-translate-y-1">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Reste à payer</p>
@@ -131,15 +147,20 @@ export const DebtDashboard = () => {
         </div>
 
         {/* Progress Bar */}
-        <Card className="p-6 shadow-soft">
+        <Card className="p-6 shadow-soft animate-fade-in overflow-hidden">
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <p className="text-sm font-medium">Progression</p>
               <p className="text-sm font-semibold text-success">{progressPercentage.toFixed(1)}%</p>
             </div>
-            <Progress value={progressPercentage} className="h-3" />
+            <div className="relative">
+              <Progress value={progressPercentage} className="h-3" />
+            </div>
           </div>
         </Card>
+
+        {/* Monthly Stats */}
+        <MonthlyStats payments={payments} onExportPDF={handleExportPDF} />
 
         {/* Add Payment Button */}
         {!showPaymentForm && (
