@@ -1,13 +1,14 @@
 // src/components/DebtDashboard.tsx
-import { useState, useMemo } from "react"; // Ajout useMemo
+import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Plus, TrendingDown, Wallet, CheckCircle2, Moon, Sun, Download } from "lucide-react";
+import { Plus, TrendingDown, Wallet, CheckCircle2, Moon, Sun, Download, Clock } from "lucide-react";
 import { PaymentForm } from "./PaymentForm";
 import { PaymentHistory } from "./PaymentHistory";
 import { MonthlyStats } from "./MonthlyStats";
+import { BalanceChart } from "./BalanceChart"; // Importer le nouveau graphique
 import { exportToPDF } from "@/utils/pdfExport";
 import { useTheme } from "next-themes";
 import {
@@ -16,10 +17,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDebtData } from "@/hooks/useDebtData"; // Hook pour la dette
-import { usePaymentsData } from "@/hooks/usePaymentsData"; // Hook pour les paiements
-
-// Types retirés car importés depuis les hooks/services
+import { useDebtData } from "@/hooks/useDebtData";
+import { usePaymentsData } from "@/hooks/usePaymentsData";
+import { formatCurrency } from "@/lib/utils"; // Importer la fonction de formatage
+import { addMonths, format, parseISO, differenceInMonths, startOfMonth } from "date-fns";
+import { fr } from "date-fns/locale";
 
 export const DebtDashboard = () => {
   // --- State & Data Fetching ---
@@ -28,29 +30,65 @@ export const DebtDashboard = () => {
 
   // Utilisation des hooks React Query
   const { data: debt, isLoading: isDebtLoading, error: debtError } = useDebtData();
-  // On passe debt?.id au hook des paiements, il ne fetchera que si l'ID existe
   const { data: payments = [], isLoading: isPaymentsLoading, error: paymentsError } = usePaymentsData(debt?.id);
 
   // Gérer l'état de chargement combiné
-  const isLoading = isDebtLoading || (debt && isPaymentsLoading); // Charger les paiements seulement si la dette est chargée
+  // On charge les paiements seulement si la dette est chargée (ou en cours de chargement)
+  const isLoading = isDebtLoading || (debt !== undefined && isPaymentsLoading);
 
   // --- Calculs Dérivés (avec useMemo pour optimiser) ---
-  const { totalPaid, remaining, progressPercentage } = useMemo(() => {
-    if (!debt) return { totalPaid: 0, remaining: 0, progressPercentage: 0 };
+  const { totalPaid, remaining, progressPercentage, projectedPayoffDate, averageMonthlyPayment } = useMemo(() => {
+    // Si la dette n'est pas encore chargée ou n'existe pas, retourner des valeurs par défaut
+    if (!debt) return { totalPaid: 0, remaining: 0, progressPercentage: 0, projectedPayoffDate: null, averageMonthlyPayment: 0 };
 
+    const debtTotalAmount = parseFloat(debt.total_amount.toString());
     const paid = payments.reduce((sum, payment) => sum + parseFloat(payment.amount.toString()), 0);
-    const remains = parseFloat(debt.total_amount.toString()) - paid;
-    const progress = debt.total_amount > 0 ? (paid / parseFloat(debt.total_amount.toString())) * 100 : 0;
+    const remains = debtTotalAmount - paid;
+    const progress = debtTotalAmount > 0 ? (paid / debtTotalAmount) * 100 : 0;
 
-    return { totalPaid: paid, remaining: remains, progressPercentage: progress };
+    // Calcul pour la projection
+    let projectedDate: string | null = null;
+    let avgPayment = 0;
+
+    if (payments.length > 0 && remains > 0) {
+      // Trier les paiements par date pour le calcul de la moyenne
+      const sortedPayments = [...payments].sort((a, b) => parseISO(a.payment_date).getTime() - parseISO(b.payment_date).getTime());
+      const firstPaymentDate = parseISO(sortedPayments[0].payment_date);
+      const now = new Date();
+      // Nombre de mois écoulés depuis le début du mois du premier paiement (au moins 1 mois complet)
+      const monthsElapsed = Math.max(1, differenceInMonths(now, startOfMonth(firstPaymentDate)) + 1);
+
+      avgPayment = paid / monthsElapsed; // Moyenne sur toute la période depuis le premier paiement
+
+      if (avgPayment > 0) {
+        const monthsRemaining = Math.ceil(remains / avgPayment);
+        // S'assurer que monthsRemaining n'est pas infini ou trop grand
+        if (isFinite(monthsRemaining) && monthsRemaining < 1200) { // Limite arbitraire (100 ans)
+            const payoffDate = addMonths(now, monthsRemaining);
+            projectedDate = format(payoffDate, "MMMM yyyy", { locale: fr });
+        } else {
+             projectedDate = "Très lointain..."; // Cas où la moyenne est très faible
+        }
+      }
+    }
+
+    return {
+        totalPaid: paid,
+        remaining: remains,
+        progressPercentage: progress,
+        projectedPayoffDate: projectedDate,
+        averageMonthlyPayment: avgPayment
+    };
   }, [debt, payments]); // Recalculer seulement si debt ou payments change
 
   // --- Gestion des Erreurs ---
    if (debtError || paymentsError) {
-       const error = debtError || paymentsError; // Prend la première erreur
+       const error = debtError || paymentsError;
        return (
-           <div className="min-h-screen flex items-center justify-center p-6 text-center text-destructive">
-               Erreur lors du chargement des données: {error?.message || 'Erreur inconnue'}
+           <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+               <p className="text-destructive mb-4">Erreur lors du chargement des données: {error?.message || 'Erreur inconnue'}</p>
+               {/* Optionnel: Bouton pour retenter */}
+               {/* <Button onClick={() => queryClient.invalidateQueries()}>Réessayer</Button> */}
            </div>
        );
    }
@@ -69,33 +107,33 @@ export const DebtDashboard = () => {
             <Skeleton className="h-28 w-full rounded-lg" />
             <Skeleton className="h-28 w-full rounded-lg" />
           </div>
-          <Skeleton className="h-20 w-full rounded-lg" />
-          <Skeleton className="h-80 w-full rounded-lg" />
-          <Skeleton className="h-12 w-full rounded-lg" />
-          <Skeleton className="h-60 w-full rounded-lg" />
+           {/* Placeholder pour la carte de projection */}
+           <Skeleton className="h-28 w-full rounded-lg md:col-span-3" />
+          <Skeleton className="h-20 w-full rounded-lg" /> {/* Progress */}
+          <Skeleton className="h-80 w-full rounded-lg" /> {/* Balance Chart */}
+          <Skeleton className="h-80 w-full rounded-lg" /> {/* Monthly Stats */}
+          <Skeleton className="h-12 w-full rounded-lg" /> {/* Add Button */}
+          <Skeleton className="h-60 w-full rounded-lg" /> {/* History */}
         </div>
       </div>
      );
   }
 
-  // --- Cas où la Dette n'est pas trouvée (après chargement) ---
-  // Normalement géré par Index.tsx qui affiche DebtSetup si pas de dette
-  // Mais ajoutons une sécurité ici.
+  // --- Cas où la Dette n'existe pas (après chargement sans erreur) ---
+  // Ce cas est normalement géré par Index.tsx, mais ajoutons une sécurité.
   if (!debt) {
      return (
        <div className="min-h-screen flex items-center justify-center p-6 text-center">
          <p className="text-muted-foreground">Aucune dette n'a été configurée.</p>
-         {/* Optionnel: Bouton pour rediriger vers le setup si nécessaire */}
+         {/* Peut-être un lien pour retourner à la configuration ? */}
        </div>
      );
   }
 
   // --- Handler Export PDF ---
   const handleExportPDF = () => {
-    // La vérification !debt est faite implicitement car on n'atteint ce code que si debt existe
     try {
-      // Trier les paiements par date (du plus ancien au plus récent) pour le PDF
-      const sortedPayments = [...payments].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
+      const sortedPayments = [...payments].sort((a, b) => parseISO(a.payment_date).getTime() - parseISO(b.payment_date).getTime());
       exportToPDF(debt, sortedPayments, totalPaid, remaining);
       toast.success("PDF exporté avec succès 📄");
     } catch (error: any) {
@@ -134,9 +172,7 @@ export const DebtDashboard = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Dette totale</p>
-                <p className="text-3xl font-semibold">
-                  {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(debt.total_amount)}
-                </p>
+                <p className="text-3xl font-semibold">{formatCurrency(debt.total_amount)}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Wallet className="w-6 h-6 text-primary" />
@@ -147,9 +183,7 @@ export const DebtDashboard = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Déjà remboursé</p>
-                <p className="text-3xl font-semibold text-success">
-                  {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(totalPaid)}
-                </p>
+                <p className="text-3xl font-semibold text-success">{formatCurrency(totalPaid)}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center animate-scale-in">
                 <CheckCircle2 className="w-6 h-6 text-success" />
@@ -160,9 +194,7 @@ export const DebtDashboard = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Reste à payer</p>
-                <p className="text-3xl font-semibold">
-                  {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(remaining)}
-                </p>
+                <p className="text-3xl font-semibold">{formatCurrency(remaining)}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
                 <TrendingDown className="w-6 h-6 text-accent" />
@@ -170,6 +202,36 @@ export const DebtDashboard = () => {
             </div>
           </Card>
         </div>
+
+         {/* Carte Projection */}
+         <Card className="p-6 shadow-soft hover:shadow-soft-md transition-all duration-300 hover:-translate-y-1 animate-fade-in">
+             <div className="flex items-start justify-between">
+                <div>
+                    <p className="text-sm text-muted-foreground mb-1">Projection de fin</p>
+                    <p className="text-3xl font-semibold">
+                        {remaining <= 0 ? "🎉 Terminé !" : (projectedPayoffDate || "N/A")}
+                    </p>
+                    {remaining <= 0 ? (
+                         <p className="text-sm text-muted-foreground mt-1">
+                           Félicitations !
+                         </p>
+                    ) : averageMonthlyPayment > 0 && projectedPayoffDate ? (
+                         <p className="text-sm text-muted-foreground mt-1">
+                            Basé sur une moyenne de {formatCurrency(averageMonthlyPayment)} / mois
+                         </p>
+                    ) : (
+                         <p className="text-sm text-muted-foreground mt-1">
+                            Pas assez de données pour une projection.
+                         </p>
+                    )}
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-success" />
+                </div>
+            </div>
+         </Card>
+
+
 
         {/* Progress Bar */}
         <Card className="p-6 shadow-soft animate-fade-in overflow-hidden">
@@ -185,16 +247,16 @@ export const DebtDashboard = () => {
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p>
-                    {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(totalPaid)} /{' '}
-                    {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(debt.total_amount)}
-                </p>
+                <p>{formatCurrency(totalPaid)} / {formatCurrency(debt.total_amount)}</p>
               </TooltipContent>
             </Tooltip>
           </div>
         </Card>
 
-        {/* Monthly Stats */}
+        {/* Graphique Solde Restant */}
+        <BalanceChart debt={debt} payments={payments} />
+
+        {/* Monthly Stats (Graphique Paiements Mensuels) */}
         <MonthlyStats payments={payments} onExportPDF={handleExportPDF} />
 
         {/* Add Payment Button */}
@@ -203,7 +265,6 @@ export const DebtDashboard = () => {
             onClick={() => setShowPaymentForm(true)}
             className="w-full"
             size="lg"
-            // Désactiver si un paiement est en cours d'ajout/suppression? Optionnel.
           >
             <Plus className="w-5 h-5 mr-2" />
             Ajouter un versement
@@ -214,9 +275,7 @@ export const DebtDashboard = () => {
         {showPaymentForm && (
           <PaymentForm
             debtId={debt.id}
-            onSuccess={() => {
-              setShowPaymentForm(false); // Fermer le formulaire après succès (géré dans le hook)
-            }}
+            onSuccess={() => setShowPaymentForm(false)} // Ferme le formulaire
             onCancel={() => setShowPaymentForm(false)}
           />
         )}
@@ -224,10 +283,11 @@ export const DebtDashboard = () => {
         {/* Payment History */}
         <PaymentHistory
           payments={payments}
-          debtId={debt.id} // Passer debtId pour la mutation delete
-          // onPaymentDeleted n'est plus nécessaire
+          debtId={debt.id} // Nécessaire pour la mutation delete/update
         />
       </div>
     </div>
   );
 };
+
+// Pas besoin de redéfinir formatCurrency si elle est importée depuis utils

@@ -1,6 +1,6 @@
 // src/hooks/usePaymentsData.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getPayments, addPaymentRecord, deletePaymentRecord, type Payment, type NewPaymentData } from '@/services/supabaseService'; // Utilisez 'type' pour les imports de types
+import { getPayments, addPaymentRecord, deletePaymentRecord, updatePaymentRecord, type Payment, type NewPaymentData } from '@/services/supabaseService'; // Utilisez 'type' pour les imports de types
 import { toast } from 'sonner';
 import { DEBT_QUERY_KEY } from './useDebtData'; // Importer la clé de query de la dette
 
@@ -41,6 +41,29 @@ export function useAddPaymentMutation() {
         onError: (error) => {
             console.error("Mutation Error: addPaymentRecord:", error);
             toast.error(`Erreur lors de l'ajout : ${error.message} 😥`);
+        },
+    });
+}
+
+// Hook pour la mutation de mise à jour de paiement
+export function useUpdatePaymentMutation() {
+    const queryClient = useQueryClient();
+
+    return useMutation<Payment, Error, { paymentId: string; updatedData: PaymentFormValues; debtId: string | undefined }>({
+        mutationFn: updatePaymentRecord, // Utilise la fonction du service
+        onSuccess: (updatedPayment, variables) => {
+            toast.success("Versement mis à jour ! ✨");
+            // Invalider les queries pour rafraîchir les données affectées
+            queryClient.invalidateQueries({ queryKey: [PAYMENTS_QUERY_KEY, variables.debtId] });
+            queryClient.invalidateQueries({ queryKey: [DEBT_QUERY_KEY] });
+            // Optionnel: Mise à jour optimiste du cache
+            // queryClient.setQueryData([PAYMENTS_QUERY_KEY, variables.debtId], (oldData: Payment[] | undefined) =>
+            //   oldData ? oldData.map(p => p.id === updatedPayment.id ? updatedPayment : p) : []
+            // );
+        },
+        onError: (error) => {
+            console.error("Mutation Error: updatePaymentRecord:", error);
+            toast.error(`Erreur lors de la mise à jour : ${error.message} 😥`);
         },
     });
 }

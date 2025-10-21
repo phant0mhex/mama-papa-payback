@@ -1,14 +1,14 @@
 // src/services/supabaseService.ts
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
-import { DebtSetupValues, PaymentFormValues } from "@/lib/schemas"; // Assurez-vous d'avoir ce fichier
+import { DebtSetupValues } from "@/lib/schemas"; // Assurez-vous d'avoir ce fichier
 import { format } from "date-fns";
-
+import { type PaymentFormValues } from "@/lib/schemas";
 export type Debt = Database['public']['Tables']['debt']['Row'];
 export type Payment = Database['public']['Tables']['payments']['Row'];
 export type NewPaymentData = Omit<Database['public']['Tables']['payments']['Insert'], 'id' | 'created_at' | 'debt_id'> & { payment_date: Date }; // Utilise Date pour le hook
 export type NewDebtData = Database['public']['Tables']['debt']['Insert'];
-
+export type UpdatePaymentData = Partial<Pick<Payment, 'amount' | 'payment_date' | 'note'>>;
 // --- Debt ---
 
 // Fonction pour vérifier s'il existe une dette
@@ -99,6 +99,34 @@ export const addPaymentRecord = async ({ debtId, paymentData }: { debtId: string
         throw new Error("Aucune donnée retournée après l'ajout du paiement.");
     }
     return data;
+};
+
+// Fonction pour mettre à jour un paiement
+export const updatePaymentRecord = async ({ paymentId, updatedData }: { paymentId: string, updatedData: PaymentFormValues }): Promise<Payment> => {
+  console.log("Service: updatePaymentRecord called for paymentId:", paymentId, "with data:", updatedData);
+  const formattedDate = format(updatedData.payment_date, "yyyy-MM-dd"); // Formatage ici
+
+  const { data, error } = await supabase
+    .from("payments")
+    .update({
+      amount: updatedData.amount,
+      payment_date: formattedDate,
+      note: updatedData.note || null,
+      // Ne met pas à jour debt_id ou created_at
+    })
+    .eq("id", paymentId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Service Error: updatePaymentRecord:", error);
+    throw new Error(`Erreur lors de la mise à jour du paiement: ${error.message}`);
+  }
+  if (!data) {
+    throw new Error("Aucune donnée retournée après la mise à jour du paiement.");
+  }
+  console.log("Service: updatePaymentRecord result:", data);
+  return data;
 };
 
 // Fonction pour supprimer un paiement
