@@ -1,5 +1,4 @@
 // src/components/PaymentForm.tsx
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -11,12 +10,12 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar"; // Import Shadcn Calendar
+import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"; // Import Popover
+} from "@/components/ui/popover";
 import {
   Form,
   FormControl,
@@ -25,56 +24,53 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { paymentFormSchema, PaymentFormValues } from "@/lib/schemas"; // Import schema
+// import { supabase } from "@/integrations/supabase/client"; // Plus besoin ici
+// import { toast } from "sonner"; // Géré dans le hook
+import { paymentFormSchema, PaymentFormValues } from "@/lib/schemas";
+import { useAddPaymentMutation, NewPaymentData } from "@/hooks/usePaymentsData"; // Importer la mutation
 
 interface PaymentFormProps {
   debtId: string;
-  onSuccess: () => void;
+  onSuccess: () => void; // Gardé pour fermer le formulaire après succès
   onCancel: () => void;
 }
 
 export const PaymentForm = ({ debtId, onSuccess, onCancel }: PaymentFormProps) => {
-  const [isLoading, setIsLoading] = useState(false);
+  const addPaymentMutation = useAddPaymentMutation(); // Utilise le hook de mutation
 
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
       amount: undefined,
-      payment_date: new Date(), // Default to today
+      payment_date: new Date(), // Date par défaut: aujourd'hui
       note: "",
     },
+    mode: "onChange",
   });
 
-  const onSubmit = async (values: PaymentFormValues) => {
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.from("payments").insert({
-        debt_id: debtId,
+  const onSubmit = (values: PaymentFormValues) => {
+    const paymentData: NewPaymentData = {
         amount: values.amount,
-        // Format date for Supabase (YYYY-MM-DD)
-        payment_date: format(values.payment_date, "yyyy-MM-dd"),
+        payment_date: values.payment_date, // Le service formatera la date
         note: values.note || null,
-      });
-
-      if (error) throw error;
-
-      toast.success("Versement ajouté avec succès");
-      onSuccess();
-    } catch (error: any) {
-      console.error("Error creating payment:", error);
-      toast.error(`Erreur lors de l'ajout: ${error.message || 'Erreur inconnue'}`);
-    } finally {
-      setIsLoading(false);
-    }
+    };
+    addPaymentMutation.mutate(
+      { debtId, paymentData },
+      {
+        onSuccess: () => {
+          onSuccess(); // Appelle onSuccess (pour fermer le form) seulement après succès de la mutation
+          form.reset(); // Réinitialise le formulaire
+        },
+        // onError est géré globalement dans le hook
+      }
+    );
   };
 
   return (
     <Card className="p-6 shadow-soft animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold">Nouveau versement</h2>
-        <Button variant="ghost" size="icon" onClick={onCancel}>
+        <Button variant="ghost" size="icon" onClick={onCancel} disabled={addPaymentMutation.isPending}>
           <X className="w-5 h-5" />
         </Button>
       </div>
@@ -94,6 +90,8 @@ export const PaymentForm = ({ debtId, onSuccess, onCancel }: PaymentFormProps) =
                     step="0.01"
                     placeholder="250.00"
                     {...field}
+                    value={field.value ?? ''}
+                    onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)}
                   />
                 </FormControl>
                 <FormMessage />
@@ -116,6 +114,7 @@ export const PaymentForm = ({ debtId, onSuccess, onCancel }: PaymentFormProps) =
                           "w-full pl-3 text-left font-normal",
                           !field.value && "text-muted-foreground"
                         )}
+                        disabled={addPaymentMutation.isPending} // Désactiver pendant la mutation
                       >
                         {field.value ? (
                           format(field.value, "dd MMMM yyyy", { locale: fr })
@@ -156,6 +155,7 @@ export const PaymentForm = ({ debtId, onSuccess, onCancel }: PaymentFormProps) =
                     placeholder="Ajouter une note..."
                     rows={2}
                     {...field}
+                    value={field.value ?? ''}
                   />
                 </FormControl>
                 <FormMessage />
@@ -169,11 +169,16 @@ export const PaymentForm = ({ debtId, onSuccess, onCancel }: PaymentFormProps) =
               variant="outline"
               onClick={onCancel}
               className="flex-1"
+              disabled={addPaymentMutation.isPending}
             >
               Annuler
             </Button>
-            <Button type="submit" disabled={isLoading} className="flex-1">
-              {isLoading ? "Ajout..." : "Ajouter"}
+            <Button
+              type="submit"
+              disabled={addPaymentMutation.isPending || !form.formState.isValid}
+              className="flex-1"
+            >
+              {addPaymentMutation.isPending ? "Ajout..." : "Ajouter"}
             </Button>
           </div>
         </form>
