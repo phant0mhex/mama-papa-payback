@@ -3,17 +3,24 @@ import { useCheckDebtExistence } from "@/hooks/useDebtData";
 import { DebtSetup } from "@/components/DebtSetup";
 import { DebtDashboard } from "@/components/DebtDashboard";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button"; // Pour le bouton réessayer
+import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query"; // Importer pour refetch
 
 const Index = () => {
-  // Utilise le hook pour vérifier l'existence de la dette
-  const { data: hasDebt, isLoading, error, refetch } = useCheckDebtExistence();
+  const queryClient = useQueryClient(); // Obtenir le client query
+  // Le hook gère l'état isLoading, data (hasDebt), error, et refetch
+  const { data: hasDebt, isLoading, error } = useCheckDebtExistence();
 
-  // Affichage Skeletons pendant la vérification initiale
+  // Fonction pour retenter le fetch
+  const handleRetry = () => {
+      queryClient.invalidateQueries({ queryKey: ['debt', 'exists'] }); // Invalider pour refetch
+  };
+
   if (isLoading) {
+    // Affichage Skeletons pendant la vérification initiale
     return (
        <div className="min-h-screen p-6 bg-gradient-to-b from-background to-secondary/20">
-        <div className="max-w-4xl mx-auto space-y-6 animate-pulse"> {/* Ajout animate-pulse */}
+        <div className="max-w-4xl mx-auto space-y-6 animate-pulse">
           <div className="flex items-center justify-between">
             <Skeleton className="h-10 w-1/2 mb-4" />
             <Skeleton className="h-10 w-10 rounded-full" />
@@ -23,27 +30,29 @@ const Index = () => {
             <Skeleton className="h-28 w-full rounded-lg" />
             <Skeleton className="h-28 w-full rounded-lg" />
           </div>
-          <Skeleton className="h-20 w-full rounded-lg" /> {/* Placeholder Progress */}
-          <Skeleton className="h-80 w-full rounded-lg" /> {/* Placeholder Stats/Chart */}
-          <Skeleton className="h-12 w-full rounded-lg" /> {/* Placeholder Button */}
-          <Skeleton className="h-60 w-full rounded-lg" /> {/* Placeholder History */}
+           <Skeleton className="h-28 w-full rounded-lg md:col-span-3" /> {/* Projection */}
+          <Skeleton className="h-20 w-full rounded-lg" /> {/* Progress */}
+          <Skeleton className="h-80 w-full rounded-lg" /> {/* Balance Chart */}
+          <Skeleton className="h-80 w-full rounded-lg" /> {/* Monthly Stats */}
+          <Skeleton className="h-12 w-full rounded-lg" /> {/* Add Button */}
+          <Skeleton className="h-60 w-full rounded-lg" /> {/* History */}
         </div>
       </div>
     );
   }
 
-  // Affichage en cas d'erreur lors de la vérification
   if (error) {
+    // Affichage en cas d'erreur
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-        <p className="text-destructive mb-4">Erreur lors de la vérification de la dette : {error.message}</p>
-        <Button onClick={() => refetch()}>Réessayer</Button>
+        <p className="text-destructive mb-4">Erreur lors de la vérification initiale : {error.message}</p>
+        <Button onClick={handleRetry}>Réessayer</Button> {/* Permet de retenter */}
       </div>
     );
   }
 
-  // Si hasDebt est true (après chargement sans erreur), afficher le dashboard, sinon le setup
-  // hasDebt peut être undefined si la requête n'a pas encore abouti, mais isLoading gère ce cas
+  // Si pas d'erreur et chargement terminé, on affiche conditionnellement
+  // `hasDebt` sera `true` ou `false` ici
   return hasDebt ? <DebtDashboard /> : <DebtSetup />;
 };
 
