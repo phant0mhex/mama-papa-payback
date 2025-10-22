@@ -1,40 +1,61 @@
+// src/components/MonthlyStats.tsx
+import { useMemo } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, TrendingUp, Download } from "lucide-react";
-import { format, startOfMonth, endOfMonth, eachMonthOfInterval, startOfYear, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachMonthOfInterval, startOfYear, parseISO, getYear } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
-} from 'recharts';
-
-interface Payment {
-  id: string;
-  amount: number;
-  payment_date: string;
-  note: string | null;
-}
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+import { type Payment } from '@/services/supabaseService';
+import { formatCurrency } from '@/lib/utils';
 
 interface MonthlyStatsProps {
   payments: Payment[];
   onExportPDF: () => void;
 }
 
+const formatBarTooltipValue = (value: number, name: string, props: any) => {
+    const count = props.payload.count;
+    const paymentText = `${count} versement${count !== 1 ? "s" : ""}`;
+    return [`${formatCurrency(value)} (${paymentText})`, "Total ce mois"];
+};
+
 export const MonthlyStats = ({ payments, onExportPDF }: MonthlyStatsProps) => {
-  // Group payments by month
-  const getMonthlyData = () => {
-    const currentYear = new Date().getFullYear();
-    const months = eachMonthOfInterval({
+
+  // Définir currentYear ici pour qu'elle soit accessible partout dans le composant
+  const currentYear = getYear(new Date()); // <--- DÉPLACER ICI
+
+  // Utilisation de useMemo pour les calculs
+  const { monthlyData, totalThisMonth, paymentsThisMonth, averageMonthlyPayment, activeMonthsCount } = useMemo(() => {
+    // const currentYear = getYear(new Date()); // <-- Supprimer d'ici
+
+    // Crée les mois de Janvier à Décembre de l'année actuelle
+    const yearMonths = eachMonthOfInterval({
       start: startOfYear(new Date(currentYear, 0, 1)),
-      end: new Date(),
+      end: new Date(currentYear, 11, 31),
     });
 
-    return months.map((month) => {
+    // ... (le reste de la logique useMemo reste identique) ...
+    const data = yearMonths.map((month) => {
       const monthStart = startOfMonth(month);
-      const monthEnd = endOfMonth(month);
+      const monthEnd = new Date() < endOfMonth(month) ? new Date() : endOfMonth(month);
 
       const monthPayments = payments.filter((payment) => {
-        const paymentDate = parseISO(payment.payment_date);
-        return paymentDate >= monthStart && paymentDate <= monthEnd;
+        try {
+            const paymentDate = parseISO(payment.payment_date);
+            return !isNaN(paymentDate.getTime()) && paymentDate >= monthStart && paymentDate <= monthEnd;
+        } catch {
+            return false;
+        }
       });
 
       const total = monthPayments.reduce(
@@ -48,36 +69,51 @@ export const MonthlyStats = ({ payments, onExportPDF }: MonthlyStatsProps) => {
         count: monthPayments.length,
       };
     });
-  };
 
-  const monthlyData = getMonthlyData();
-  const totalThisMonth = monthlyData[monthlyData.length - 1]?.total || 0;
-  const paymentsThisMonth = monthlyData[monthlyData.length - 1]?.count || 0;
+    const currentMonthData = data.find(d => d.month === format(new Date(), "MMM", { locale: fr }));
+    const totThisMonth = currentMonthData?.total || 0;
+    const payThisMonth = currentMonthData?.count || 0;
+
+    const activeMonths = data.filter(m => m.total > 0);
+    const actMonthsCount = activeMonths.length;
+    const totalPaidAcrossMonths = activeMonths.reduce((sum, m) => sum + m.total, 0);
+    const avgPayment = actMonthsCount > 0 ? totalPaidAcrossMonths / actMonthsCount : 0;
+
+    return {
+        monthlyData: data,
+        totalThisMonth: totThisMonth,
+        paymentsThisMonth: payThisMonth,
+        averageMonthlyPayment: avgPayment,
+        activeMonthsCount: actMonthsCount,
+    };
+
+  }, [payments, currentYear]); // Ajouter currentYear aux dépendances de useMemo
 
   return (
     <div className="space-y-4 animate-fade-in-up">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-accent" />
-          Statistiques mensuelles
+          Statistiques mensuelles ({currentYear}) {/* Utiliser la variable ici */}
         </h2>
-        <Button onClick={onExportPDF} variant="outline" size="sm">
+        {/* ... (bouton Export PDF) ... */}
+         <Button onClick={onExportPDF} variant="outline" size="sm">
           <Download className="w-4 h-4 mr-2" />
           Exporter PDF
         </Button>
       </div>
 
-      {/* Current Month Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* ... (Cartes Stats mois courant et moyenne) ... */}
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-6 shadow-soft hover:shadow-soft-md transition-all">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Ce mois-ci</p>
+              <p className="text-sm text-muted-foreground mb-1">Ce mois-ci ({format(new Date(), 'MMMM', {locale: fr})})</p>
               <p className="text-3xl font-semibold text-success">
-                {totalThisMonth.toFixed(2)} €
+                {formatCurrency(totalThisMonth)}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                {paymentsThisMonth} versement{paymentsThisMonth > 1 ? "s" : ""}
+                {paymentsThisMonth} versement{paymentsThisMonth !== 1 ? "s" : ""}
               </p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
@@ -85,77 +121,70 @@ export const MonthlyStats = ({ payments, onExportPDF }: MonthlyStatsProps) => {
             </div>
           </div>
         </Card>
-
-        <Card className="p-6 shadow-soft hover:shadow-soft-md transition-all">
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Moyenne mensuelle</p>
-            <p className="text-3xl font-semibold">
-              {(
-                monthlyData.reduce((sum, m) => sum + m.total, 0) / 
-                monthlyData.filter(m => m.total > 0).length || 0
-              ).toFixed(2)} €
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Sur {monthlyData.filter(m => m.total > 0).length} mois actifs
-            </p>
-          </div>
+         <Card className="p-6 shadow-soft hover:shadow-soft-md transition-all">
+           <div className="flex items-start justify-between">
+              <div>
+                  <p className="text-sm text-muted-foreground mb-1">Moyenne mensuelle</p>
+                  <p className="text-3xl font-semibold">
+                  {formatCurrency(averageMonthlyPayment)}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                  Sur {activeMonthsCount} mois actifs
+                  </p>
+              </div>
+           </div>
         </Card>
       </div>
 
-   {/* Monthly Chart */}
+
+      {/* Monthly Chart */}
       <Card className="p-6 shadow-soft">
-        <h3 className="text-sm font-medium mb-4">Évolution mensuelle</h3>
+        <h3 className="text-sm font-medium mb-4 text-muted-foreground">Évolution mensuelle des versements</h3>
         <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={monthlyData}>
-            {/* ... CartesianGrid, XAxis, YAxis ... */}
-             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+          <BarChart data={monthlyData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
+            {/* ... (Grid, Axes, Bar, Cell) ... */}
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
             <XAxis
               dataKey="month"
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-              axisLine={false} // Optionnel: Cacher la ligne de l'axe
-              tickLine={false} // Optionnel: Cacher les ticks
-            />
-            <YAxis
-              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-              tickFormatter={(value) => `${value}€`}
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              width={50} // Ajuster si besoin
+              dy={5}
+            />
+            <YAxis
+              tickFormatter={(value) => `${value}€`}
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              width={50}
+              tickMargin={5}
             />
             <Tooltip
-              cursor={{ fill: 'hsl(var(--accent) / 0.1)' }} // Curseur au survol
+              cursor={{ fill: 'hsl(var(--accent) / 0.1)' }}
               contentStyle={{
-                backgroundColor: "hsl(var(--popover))", // Utilise la couleur du popover Shadcn
+                backgroundColor: "hsl(var(--popover))",
                 borderColor: "hsl(var(--border))",
-                borderRadius: "var(--radius)", // Utilise le radius Shadcn
-                boxShadow: "var(--shadow-md)", // Utilise l'ombre Shadcn
+                borderRadius: "var(--radius)",
+                boxShadow: "var(--shadow-md)",
                 padding: "8px 12px",
               }}
-              labelStyle={{ // Style du label (mois)
-                marginBottom: "4px",
-                fontWeight: "500",
-                color: "hsl(var(--foreground))",
-              }}
-              itemStyle={{ // Style de chaque ligne dans le tooltip
-                fontSize: "12px",
-                color: "hsl(var(--muted-foreground))",
-              }}
-              formatter={(value: number, name: string, props: any) => {
-                 // Props contient l'entrée de données complète (props.payload)
-                 const count = props.payload.count;
-                 const formattedValue = `${value.toFixed(2)} €`;
-                 const paymentText = `${count} versement${count > 1 ? "s" : ""}`;
-                 // Retourne un tableau [valeur formatée, nom formaté]
-                 return [`${formattedValue} (${paymentText})`, "Montant"];
-              }}
-              // labelFormatter={(label) => `Mois: ${label}`} // Optionnel pour formater le label (mois)
+               labelStyle={{
+                    marginBottom: "4px",
+                    fontWeight: "500",
+                    color: "hsl(var(--foreground))",
+               }}
+               itemStyle={{ fontSize: "12px",
+                color: "hsl(var(--success))",
+                }}
+              formatter={formatBarTooltipValue}
+              // Utiliser la variable currentYear définie en dehors de useMemo
+              labelFormatter={(label) => `${label} ${currentYear}`} // <--- ICI
             />
-            <Bar dataKey="total" radius={[8, 8, 0, 0]}>
-              {/* ... Cell ... */}
+            <Bar dataKey="total" radius={[4, 4, 0, 0]}>
               {monthlyData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={entry.total > 0 ? "hsl(var(--success))" : "hsl(var(--muted))"}
+                  fill={entry.total > 0 ? "hsl(var(--primary))" : "hsl(var(--muted) / 0.5)"}
                 />
               ))}
             </Bar>
