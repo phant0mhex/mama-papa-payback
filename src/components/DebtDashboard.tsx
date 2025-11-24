@@ -11,6 +11,8 @@ import { MonthlyStats } from "./MonthlyStats";
 import { BalanceChart } from "./BalanceChart"; // Assurez-vous que ce composant existe
 import { exportToPDF } from "@/utils/pdfExport"; // Assurez-vous que ce fichier existe et est à jour
 import { useTheme } from "next-themes";
+import { LogoutButton } from '../auth/LogoutButton';
+import { useAuth } from '../auth/AuthProvider';
 import {
   Tooltip,
   TooltipContent,
@@ -32,6 +34,9 @@ import { formatCurrency } from "@/lib/utils"; // Fonction de formatage
 import { addMonths, format, parseISO, differenceInMonths, startOfMonth, isValid } from "date-fns"; // Ajout isValid
 import { fr } from "date-fns/locale";
 import { useQueryClient } from "@tanstack/react-query"; // Pour refetch manuel si besoin
+
+
+
 
 export const DebtDashboard = () => {
   // --- State & Data Fetching ---
@@ -188,6 +193,10 @@ export const DebtDashboard = () => {
     }
   };
 
+
+  const { session } = useAuth();
+
+  
   // --- Rendu Normal ---
   return (
     <div className="min-h-screen p-6 bg-gradient-to-b from-background to-secondary/20">
@@ -235,6 +244,10 @@ export const DebtDashboard = () => {
             <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span className="sr-only">Changer de thème</span>
           </Button>
+
+          <LogoutButton />
+
+
         </div>
 
         {/* Stats Cards */}

@@ -5,6 +5,9 @@ import { DebtDashboard } from "@/components/DebtDashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query"; // Importer pour refetch
+import { LogoutButton } from '../auth/LogoutButton';
+import { useAuth } from '../auth/AuthProvider';
+
 
 const Index = () => {
   const queryClient = useQueryClient(); // Obtenir le client query
@@ -50,6 +53,8 @@ const Index = () => {
       </div>
     );
   }
+
+  const { session } = useAuth();
 
   // Si pas d'erreur et chargement terminé, on affiche conditionnellement
   // `hasDebt` sera `true` ou `false` ici

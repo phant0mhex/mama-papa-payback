@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import Login from './components/Login';
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { ThemeProvider } from "next-themes"; // Importer
@@ -17,9 +19,19 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/login" element={<Login />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
+
+          <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              {/* Ce composant ne sera rendu que si l'utilisateur est connecté */}
+              <Index />
+            </ProtectedRoute>
+          }
+        />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
@@ -28,3 +40,4 @@ const App = () => (
 );
 
 export default App;
+ <Route path="/" element={<Index />} />
